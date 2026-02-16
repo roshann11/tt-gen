@@ -1,14 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import connectDB from "./config/db.js";
-import facultyRoutes from "./routes/faculty.js";
-import roomRoutes from "./routes/rooms.js";
-import labRoutes from "./routes/labs.js";
-import subjectRoutes from "./routes/subjects.js";
-import timeSlotRoutes from "./routes/timeSlots.js";
-import timetableRoutes from "./routes/timetable.js";
-import { errorHandler } from "./middleware/errorHandler.js";
+import connectDB from "./config/db";
+import facultyRoutes from "./routes/faculty";
+import roomRoutes from "./routes/rooms";
+import labRoutes from "./routes/labs";
+import subjectRoutes from "./routes/subjects";
+import timeSlotRoutes from "./routes/timeSlots";
+import timetableRoutes from "./routes/timetable";
+import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
 connectDB();

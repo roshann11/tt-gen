@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import Room from "../models/room.js";
-import { parseCSV } from "../utils/csvParser.js";
+import Room from "../models/room";
+import { parseCSV } from "../utils/csvParser";
 
 export const getAll = async (_req: Request, res: Response) => {
   const data = await Room.find();

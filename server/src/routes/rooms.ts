@@ -1,6 +1,6 @@
 import { Router } from "express";
-import * as ctrl from "../controllers/roomController.js";
-import { upload } from "../middleware/upload.js";
+import * as ctrl from "../controllers/roomController";
+import { upload } from "../middleware/upload";
 
 const router = Router();
 router.get("/", ctrl.getAll);

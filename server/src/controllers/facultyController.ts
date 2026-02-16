@@ -1,6 +1,6 @@
 import type{ Request, Response } from "express";
-import Faculty from "../models/faculty.js";
-import { parseCSV } from "../utils/csvParser.js";
+import Faculty from "../models/faculty";
+import { parseCSV } from "../utils/csvParser";
 
 export const getAll = async (_req: Request, res: Response) => {
   const data = await Faculty.find();

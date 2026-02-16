@@ -1,7 +1,6 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "type": "module",
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/app.ts",

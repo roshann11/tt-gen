@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
-import TimeSlot from "../models/timeslot.js";
-import { parseCSV } from "../utils/csvParser.js";
+import TimeSlot from "../models/timeslot";
+import { parseCSV } from "../utils/csvParser";
 
 export const getAll = async (_req: Request, res: Response) => {
   const data = await TimeSlot.find().sort({ day: 1, slotNumber: 1 });

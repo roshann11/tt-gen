@@ -1,9 +1,9 @@
-import Faculty from "../models/faculty.js";
-import Room from "../models/room.js";
-import Lab from "../models/lab.js";
-import Subject from "../models/subject.js";
-import TimeSlot from "../models/timeslot.js";
-import Timetable from "../models/timetable.js";
+import Faculty from "../models/faculty";
+import Room from "../models/room";
+import Lab from "../models/lab";
+import Subject from "../models/subject";
+import TimeSlot from "../models/timeslot";
+import Timetable from "../models/timetable";
 
 interface SlotEntry {
   day: string;
