@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AppLayout from "@/components/AppLayout";
 import Dashboard from "@/pages/Dashboard";
-import FacultyPage from "@/pages/FacultyPage";
+import FacultyPage from "@/pages/FacultyPages";
 import RoomsPage from "@/pages/RoomsPage";
 import SubjectsPage from "@/pages/SubjectsPage";
 import TimeSlotsPage from "@/pages/TimeSlotsPage";
