@@ -8,7 +8,7 @@ import FacultyPage from "@/pages/FacultyPages";
 import RoomsPage from "@/pages/RoomsPage";
 import SubjectsPage from "@/pages/SubjectsPage";
 import TimeSlotsPage from "@/pages/TimeSlotsPage";
-import TimetablePage from "@/pages/TimetablePage";
+import TimetablePage from "@/pages/TimeTablePage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
