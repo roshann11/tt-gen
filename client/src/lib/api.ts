@@ -8,31 +8,33 @@ const api = axios.create({
 });
 
 // Faculty
-export const getFaculty = () => api.get("/faculty").then((r) => r.data);
-export const createFaculty = (data: any) => api.post("/faculty", data).then((r) => r.data);
-export const updateFaculty = (id: string, data: any) => api.put(`/faculty/${id}`, data).then((r) => r.data);
-export const deleteFaculty = (id: string) => api.delete(`/faculty/${id}`).then((r) => r.data);
+const unwrap = (d: any) => (d && d.data && Array.isArray(d.data) ? d.data : d);
+
+export const getFaculty = () => api.get("/faculty").then((r) => unwrap(r.data));
+export const createFaculty = (data: any) => api.post("/faculty", data).then((r) => unwrap(r.data));
+export const updateFaculty = (id: string, data: any) => api.put(`/faculty/${id}`, data).then((r) => unwrap(r.data));
+export const deleteFaculty = (id: string) => api.delete(`/faculty/${id}`).then((r) => unwrap(r.data));
 
 // Rooms
-export const getRooms = () => api.get("/rooms").then((r) => r.data);
-export const createRoom = (data: any) => api.post("/rooms", data).then((r) => r.data);
-export const updateRoom = (id: string, data: any) => api.put(`/rooms/${id}`, data).then((r) => r.data);
-export const deleteRoom = (id: string) => api.delete(`/rooms/${id}`).then((r) => r.data);
+export const getRooms = () => api.get("/rooms").then((r) => unwrap(r.data));
+export const createRoom = (data: any) => api.post("/rooms", data).then((r) => unwrap(r.data));
+export const updateRoom = (id: string, data: any) => api.put(`/rooms/${id}`, data).then((r) => unwrap(r.data));
+export const deleteRoom = (id: string) => api.delete(`/rooms/${id}`).then((r) => unwrap(r.data));
 
 // Subjects
-export const getSubjects = () => api.get("/subjects").then((r) => r.data);
-export const createSubject = (data: any) => api.post("/subjects", data).then((r) => r.data);
-export const updateSubject = (id: string, data: any) => api.put(`/subjects/${id}`, data).then((r) => r.data);
-export const deleteSubject = (id: string) => api.delete(`/subjects/${id}`).then((r) => r.data);
+export const getSubjects = () => api.get("/subjects").then((r) => unwrap(r.data));
+export const createSubject = (data: any) => api.post("/subjects", data).then((r) => unwrap(r.data));
+export const updateSubject = (id: string, data: any) => api.put(`/subjects/${id}`, data).then((r) => unwrap(r.data));
+export const deleteSubject = (id: string) => api.delete(`/subjects/${id}`).then((r) => unwrap(r.data));
 
 // Time Slots
-export const getTimeSlots = () => api.get("/timeslots").then((r) => r.data);
-export const createTimeSlot = (data: any) => api.post("/timeslots", data).then((r) => r.data);
-export const updateTimeSlot = (id: string, data: any) => api.put(`/timeslots/${id}`, data).then((r) => r.data);
-export const deleteTimeSlot = (id: string) => api.delete(`/timeslots/${id}`).then((r) => r.data);
+export const getTimeSlots = () => api.get("/timeslots").then((r) => unwrap(r.data));
+export const createTimeSlot = (data: any) => api.post("/timeslots", data).then((r) => unwrap(r.data));
+export const updateTimeSlot = (id: string, data: any) => api.put(`/timeslots/${id}`, data).then((r) => unwrap(r.data));
+export const deleteTimeSlot = (id: string) => api.delete(`/timeslots/${id}`).then((r) => unwrap(r.data));
 
 // Timetable
-export const generateTimetable = () => api.post("/timetable/generate").then((r) => r.data);
-export const getTimetable = () => api.get("/timetable").then((r) => r.data);
+export const generateTimetable = () => api.post("/timetable/generate").then((r) => unwrap(r.data));
+export const getTimetable = () => api.get("/timetable").then((r) => unwrap(r.data));
 
 export default api;

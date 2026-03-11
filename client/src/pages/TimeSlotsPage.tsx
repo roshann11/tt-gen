@@ -42,7 +42,7 @@ export default function TimeSlotsPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { day: form.day, startTime: form.startTime, endTime: form.endTime, period: Number(form.period) };
+    const payload = { day: form.day, startTime: form.startTime, endTime: form.endTime, slotNumber: Number(form.period) };
     if (editing) updateMut.mutate({ id: editing._id, ...payload });
     else createMut.mutate(payload);
   }
