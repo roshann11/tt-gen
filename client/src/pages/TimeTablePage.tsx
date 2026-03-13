@@ -1,131 +1,187 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { CalendarDays, Loader2, AlertCircle } from "lucide-react";
+import { CalendarDays, Loader2, Sparkles } from "lucide-react";
 import { generateTimetable, getTimetable } from "@/lib/api";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 const SLOT_COLORS = [
-  "bg-primary/15 text-primary border-primary/30",
-  "bg-accent/15 text-accent border-accent/30",
-  "bg-secondary/15 text-secondary-foreground border-secondary/30",
-  "bg-destructive/15 text-destructive border-destructive/30",
-  "bg-primary/10 text-primary border-primary/20",
+  "bg-[hsl(var(--timetable-blue))]",
+  "bg-[hsl(var(--timetable-green))]",
+  "bg-[hsl(var(--timetable-orange))]",
+  "bg-[hsl(var(--timetable-purple))]",
+  "bg-[hsl(var(--timetable-red))]",
+  "bg-[hsl(var(--timetable-teal))]",
+  "bg-[hsl(var(--timetable-pink))]",
+  "bg-[hsl(var(--timetable-yellow))]",
 ];
 
+function getColor(index: number) {
+  return SLOT_COLORS[index % SLOT_COLORS.length];
+}
+
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 export default function TimetablePage() {
-  const [generated, setGenerated] = useState(false);
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({ queryKey: ["timetable"], queryFn: getTimetable });
+  const [activeSem, setActiveSem] = useState("1");
 
-  const { data: timetable, isLoading, refetch } = useQuery({
-    queryKey: ["timetable"],
-    queryFn: getTimetable,
-    enabled: generated,
-  });
-
-  const generateMut = useMutation({
+  const genMut = useMutation({
     mutationFn: generateTimetable,
     onSuccess: () => {
-      setGenerated(true);
-      refetch();
+      qc.invalidateQueries({ queryKey: ["timetable"] });
       toast.success("Timetable generated successfully!");
     },
-    onError: () => toast.error("Failed to generate timetable"),
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.message || "Failed to generate timetable");
+    },
   });
 
-  const entries = Array.isArray(timetable) ? timetable : [];
+  // Backend returns { success, data: [{ semester, entries: [...] }] }
+  const rawData = data?.data || data || [];
+  const timetables = Array.isArray(rawData) ? rawData : [];
+  const semesters = timetables.map((t: any) => String(t.semester)).sort();
 
-  // Group by semester -> day -> period
-  const grouped: Record<number, Record<string, any[]>> = {};
-  entries.forEach((entry: any) => {
-    const sem = entry.semester || entry.subject?.semester || 1;
-    const day = entry.day || entry.timeSlot?.day || "Monday";
-    if (!grouped[sem]) grouped[sem] = {};
-    if (!grouped[sem][day]) grouped[sem][day] = [];
-    grouped[sem][day].push(entry);
+  // Build grid from entries: { [day]: { [slotNumber]: entry } }
+  function buildGrid(sem: string) {
+    const tt = timetables.find((t: any) => String(t.semester) === sem);
+    if (!tt || !Array.isArray(tt.entries)) return {};
+    const grid: Record<string, Record<string, any>> = {};
+    for (const entry of tt.entries) {
+      const day = entry.day;
+      const slot = entry.slotNumber;
+      if (!day || slot == null) continue;
+      if (!grid[day]) grid[day] = {};
+      grid[day][String(slot)] = entry;
+    }
+    return grid;
+  }
+
+  // Get unique periods/slots
+  function getPeriods() {
+    const periods = new Set<number>();
+    timetables.forEach((t: any) => {
+      (t.entries || []).forEach((e: any) => {
+        if (e.slotNumber != null) periods.add(Number(e.slotNumber));
+      });
+    });
+    return Array.from(periods).sort((a, b) => a - b);
+  }
+
+  // Subject color map
+  const subjectColorMap: Record<string, string> = {};
+  let colorIdx = 0;
+  timetables.forEach((t: any) => {
+    (t.entries || []).forEach((e: any) => {
+      const key = e.subject || "Unknown";
+      if (!subjectColorMap[key]) {
+        subjectColorMap[key] = getColor(colorIdx++);
+      }
+    });
   });
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const grid = buildGrid(activeSem);
+  const periods = getPeriods();
 
   return (
     <div>
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+      >
         <div className="flex items-center gap-3">
           <div className="rounded-lg bg-primary p-2 text-primary-foreground">
             <CalendarDays className="h-5 w-5" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">Timetable</h1>
-            <p className="text-muted-foreground">Generate and view your academic schedule</p>
+            <p className="text-muted-foreground">Generate & view conflict-free schedules</p>
           </div>
         </div>
-        <button
-          onClick={() => generateMut.mutate()}
-          disabled={generateMut.isPending}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+        <Button
+          onClick={() => genMut.mutate()}
+          disabled={genMut.isPending}
+          className="gap-2"
+          size="lg"
         >
-          {generateMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarDays className="h-4 w-4" />}
+          {genMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           Generate Timetable
-        </button>
+        </Button>
       </motion.div>
 
-      {!generated && entries.length === 0 && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-12 text-center">
-          <CalendarDays className="mx-auto h-16 w-16 text-muted-foreground/30" />
-          <h2 className="mt-4 text-xl font-semibold text-muted-foreground">No timetable generated yet</h2>
-          <p className="mt-2 text-sm text-muted-foreground/70">
-            Add faculty, rooms, subjects, and time slots first, then click "Generate Timetable"
-          </p>
-        </motion.div>
-      )}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="mt-6">
+        {isLoading ? (
+          <Card><CardContent className="flex items-center justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></CardContent></Card>
+        ) : semesters.length === 0 ? (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <CalendarDays className="mx-auto h-12 w-12 text-muted-foreground/40" />
+              <p className="mt-4 text-lg font-medium text-muted-foreground">No timetable generated yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">Add faculty, rooms, subjects, and time slots, then click Generate.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Tabs value={activeSem} onValueChange={setActiveSem}>
+            <TabsList>
+              {semesters.sort().map((s) => (
+                <TabsTrigger key={s} value={s}>Semester {s}</TabsTrigger>
+              ))}
+            </TabsList>
 
-      {isLoading && (
-        <div className="mt-12 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      )}
-
-      {Object.keys(grouped).sort((a, b) => Number(a) - Number(b)).map((sem) => (
-        <motion.div key={sem} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
-          <h2 className="text-xl font-bold mb-4">Semester {sem}</h2>
-          <div className="rounded-xl border bg-card shadow-sm overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b bg-muted/50">
-                <tr>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Day</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Period</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Subject</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Faculty</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Room</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                {days.map((day) =>
-                  (grouped[Number(sem)][day] || [])
-                    .sort((a: any, b: any) => (a.timeSlot?.period || a.period || 0) - (b.timeSlot?.period || b.period || 0))
-                    .map((entry: any, idx: number) => (
-                      <tr key={`${day}-${idx}`} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-medium">{day}</td>
-                        <td className="px-4 py-3">{entry.timeSlot?.period || entry.period}</td>
-                        <td className="px-4 py-3">
-                          <span className={`inline-block rounded-md border px-2 py-0.5 text-xs font-medium ${SLOT_COLORS[idx % SLOT_COLORS.length]}`}>
-                            {entry.subject?.name || entry.subjectName || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">{entry.faculty?.name || entry.facultyName || "—"}</td>
-                        <td className="px-4 py-3">{entry.room?.name || entry.roomName || "—"}</td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {entry.timeSlot?.startTime || entry.startTime || ""} - {entry.timeSlot?.endTime || entry.endTime || ""}
-                        </td>
-                      </tr>
-                    ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      ))}
+            {semesters.map((sem) => {
+              const semGrid = buildGrid(sem);
+              return (
+                <TabsContent key={sem} value={sem}>
+                  <Card>
+                    <CardHeader><CardTitle>Semester {sem} Schedule</CardTitle></CardHeader>
+                    <CardContent className="overflow-x-auto p-0">
+                      <table className="w-full min-w-[700px] border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b bg-muted/50">
+                            <th className="p-3 text-left font-semibold text-muted-foreground">Day</th>
+                            {periods.map((p) => (
+                              <th key={p} className="p-3 text-center font-semibold text-muted-foreground">Period {p}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {DAYS.map((day) => (
+                            <tr key={day} className="border-b">
+                              <td className="p-3 font-semibold">{day}</td>
+                              {periods.map((p) => {
+                                const entry = semGrid[day]?.[String(p)];
+                                if (!entry) return <td key={p} className="p-2"><div className="h-16 rounded-lg bg-muted/30" /></td>;
+                                const subName = entry.subject || "—";
+                                const facName = entry.faculty || "";
+                                const roomName = entry.room || "";
+                                const color = subjectColorMap[subName] || "bg-muted";
+                                return (
+                                  <td key={p} className="p-2">
+                                    <div className={`${color} flex h-16 flex-col items-center justify-center rounded-lg p-1 text-white shadow-sm`}>
+                                      <span className="text-xs font-bold leading-tight">{subName}</span>
+                                      {facName && <span className="mt-0.5 text-[10px] opacity-90">{facName}</span>}
+                                      {roomName && <span className="text-[10px] opacity-80">{roomName}</span>}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              );
+            })}
+          </Tabs>
+        )}
+      </motion.div>
     </div>
   );
 }
