@@ -27,6 +27,15 @@
     --sidebar-primary: 45 80% 60%;
     --sidebar-accent: 220 30% 28%;
     --sidebar-border: 220 25% 30%;
+
+    --timetable-blue: 217 91% 60%;
+    --timetable-green: 142 71% 45%;
+    --timetable-orange: 25 95% 53%;
+    --timetable-purple: 262 83% 58%;
+    --timetable-red: 0 84% 60%;
+    --timetable-teal: 173 80% 40%;
+    --timetable-pink: 330 81% 60%;
+    --timetable-yellow: 45 93% 47%;
   }
 }
 
