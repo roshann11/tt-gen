@@ -77,7 +77,6 @@ export async function generateTimetable() {
     throw new Error("Missing data: ensure faculty, rooms, subjects, and time slots are populated.");
   }
 
-  // Separate lecture rooms and lab rooms using Room.type field
   const lectureRooms = rooms.filter((r: any) => r.type === "lecture").map((r: any) => r.name).filter(Boolean);
   const labRooms = rooms.filter((r: any) => r.type === "lab").map((r: any) => r.name).filter(Boolean);
 
@@ -86,7 +85,6 @@ export async function generateTimetable() {
 
   if (!lectureRooms.length) throw new Error("No lecture-type rooms found. Add rooms with type='lecture'.");
 
-  // Normalize time slots
   const timeSlots: NormalizedSlot[] = rawTimeSlots
     .map((slot: any) => {
       const day = normalizeDay(slot.day);
@@ -113,7 +111,6 @@ export async function generateTimetable() {
   }
   const availableDays = Object.keys(slotsByDay);
 
-  // Build faculty map: shortName -> { name, subjects[] }
   const facultyMap: Record<string, { name: string; subjects: string[] }> = {};
   for (const f of faculties as any[]) {
     const key = f.shortName || f.name;
@@ -123,7 +120,6 @@ export async function generateTimetable() {
 
   if (!allFacultyNames.length) throw new Error("No valid faculty found.");
 
-  // Faculty load tracking
   const facultyLoad: FacultyLoad = {};
   for (const fac of allFacultyNames) {
     facultyLoad[fac] = { total: 0, perDay: {} };
@@ -135,37 +131,47 @@ export async function generateTimetable() {
   // Global occupancy tracking
   const occupiedFaculty: Record<string, Set<string>> = {};
   const occupiedRoom: Record<string, Set<string>> = {};
+  const occupiedSemesterSlot: Record<string, Set<string>> = {}; // NEW: prevent same-semester conflicts
   const slotKey = (day: string, slotNum: number) => `${day}-${slotNum}`;
 
   const tempDayLoad = (temp: TempBooking[], faculty: string, day: string) =>
     temp.filter((b) => b.faculty === faculty && b.day === day).length;
 
   const isAvailable = (
-    day: string, slotNum: number, facultyName: string, roomName: string, tempBookings: TempBooking[]
+    day: string, slotNum: number, facultyName: string, roomName: string,
+    tempBookings: TempBooking[], semester: number // NEW param
   ) => {
     const key = slotKey(day, slotNum);
+
+    // Check semester-slot conflict: another subject in the same semester already occupies this slot
+    if (occupiedSemesterSlot[key]?.has(String(semester))) return false;
+
     if (occupiedFaculty[key]?.has(facultyName)) return false;
     if (occupiedRoom[key]?.has(roomName)) return false;
+
     const tempConflict = tempBookings.some(
       (b) => b.day === day && b.slotNumber === slotNum && (b.faculty === facultyName || b.room === roomName)
     );
     if (tempConflict) return false;
+
     const currentDayLoad = facultyLoad[facultyName]?.perDay[day] ?? 0;
     if (currentDayLoad + tempDayLoad(tempBookings, facultyName, day) >= MAX_PER_DAY) return false;
+
     return true;
   };
 
-  const bookGlobal = (day: string, slotNum: number, facultyName: string, roomName: string) => {
+  const bookGlobal = (day: string, slotNum: number, facultyName: string, roomName: string, semester: number) => {
     const key = slotKey(day, slotNum);
     if (!occupiedFaculty[key]) occupiedFaculty[key] = new Set();
     if (!occupiedRoom[key]) occupiedRoom[key] = new Set();
+    if (!occupiedSemesterSlot[key]) occupiedSemesterSlot[key] = new Set();
     occupiedFaculty[key].add(facultyName);
     occupiedRoom[key].add(roomName);
+    occupiedSemesterSlot[key].add(String(semester)); // NEW: mark semester-slot as occupied
     facultyLoad[facultyName].total += 1;
     facultyLoad[facultyName].perDay[day] = (facultyLoad[facultyName].perDay[day] || 0) + 1;
   };
 
-  // Get semesters
   const semesters = [...new Set(
     subjects.map((s: any) => normalizeSemester(s.semester)).filter(Number.isFinite)
   )].sort((a, b) => a - b);
@@ -178,7 +184,6 @@ export async function generateTimetable() {
     const semSubjects = subjects.filter((s: any) => normalizeSemester(s.semester) === sem);
     if (!semSubjects.length) continue;
 
-    // Sort: subjects with labs first, then by lectures needed (descending)
     semSubjects.sort((a: any, b: any) => {
       const aWeight = (a.hasLab ? 10 : 0) + (a.lecturesPerWeek || 3);
       const bWeight = (b.hasLab ? 10 : 0) + (b.lecturesPerWeek || 3);
@@ -186,6 +191,9 @@ export async function generateTimetable() {
     });
 
     const entries: SlotEntry[] = [];
+
+    // Track semester-level temp bookings to prevent intra-subject conflicts within same semester
+    const semesterTempSlots: Set<string> = new Set();
 
     for (const subj of semSubjects as any[]) {
       const subjectName = subj.name || subj.code || "Unknown";
@@ -195,16 +203,13 @@ export async function generateTimetable() {
 
       console.log(`📝 Scheduling: ${subjectName} (${subjectCode}) Sem ${sem} — ${requiredLectures} lectures, ${requiredLabs} labs`);
 
-      // Find eligible faculty (those who list this subject code, or ALL if none match)
       let eligibleFaculty = allFacultyNames.filter(
         (fn) => facultyMap[fn].subjects.includes(subjectCode)
       );
       if (!eligibleFaculty.length) {
-        // Fallback: any faculty
         eligibleFaculty = [...allFacultyNames];
       }
 
-      // Sort by least loaded
       eligibleFaculty.sort((a, b) => (facultyLoad[a]?.total ?? 0) - (facultyLoad[b]?.total ?? 0));
 
       let bestPlan: { bookings: TempBooking[]; entries: SlotEntry[] } | null = null;
@@ -222,8 +227,11 @@ export async function generateTimetable() {
           if (lecturesBooked >= requiredLectures) break;
           const daySlots = slotsByDay[day] ?? [];
           for (const slot of daySlots) {
+            // Also check semester-level temp slots
+            if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
+
             const roomName = lectureRooms.find((r) =>
-              isAvailable(day, slot.slotNumber, facultyName, r, tempBookings)
+              isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
             );
             if (!roomName) continue;
             tempBookings.push({ day, slotNumber: slot.slotNumber, faculty: facultyName, room: roomName });
@@ -232,7 +240,7 @@ export async function generateTimetable() {
               subject: subjectName, type: "lecture", faculty: facultyName, room: roomName,
             });
             lecturesBooked++;
-            break; // 1 per day in pass 1
+            break;
           }
         }
 
@@ -242,8 +250,10 @@ export async function generateTimetable() {
             if (lecturesBooked >= requiredLectures) break;
             for (const slot of (slotsByDay[day] ?? [])) {
               if (lecturesBooked >= requiredLectures) break;
+              if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
+
               const roomName = lectureRooms.find((r) =>
-                isAvailable(day, slot.slotNumber, facultyName, r, tempBookings)
+                isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
               );
               if (!roomName) continue;
               tempBookings.push({ day, slotNumber: slot.slotNumber, faculty: facultyName, room: roomName });
@@ -267,10 +277,15 @@ export async function generateTimetable() {
                 const s1 = daySlots[i];
                 const s2 = daySlots[i + 1];
                 if (s2.slotNumber !== s1.slotNumber + 1) continue;
+
+                // Check semester-level conflicts for both consecutive slots
+                if (semesterTempSlots.has(slotKey(day, s1.slotNumber))) continue;
+                if (semesterTempSlots.has(slotKey(day, s2.slotNumber))) continue;
+
                 const labName = labRooms.find(
                   (lab) =>
-                    isAvailable(day, s1.slotNumber, facultyName, lab, tempBookings) &&
-                    isAvailable(day, s2.slotNumber, facultyName, lab, tempBookings)
+                    isAvailable(day, s1.slotNumber, facultyName, lab, tempBookings, sem) &&
+                    isAvailable(day, s2.slotNumber, facultyName, lab, tempBookings, sem)
                 );
                 if (!labName) continue;
                 tempBookings.push({ day, slotNumber: s1.slotNumber, faculty: facultyName, room: labName });
@@ -291,26 +306,25 @@ export async function generateTimetable() {
           }
         }
 
-        // Score this plan (best-fit: keep the best attempt even if not perfect)
         const score = lecturesBooked + labsBooked * 2;
         if (score > bestScore) {
           bestScore = score;
           bestPlan = { bookings: [...tempBookings], entries: [...tempEntries] };
         }
 
-        // Perfect fit — stop trying other faculty
         if (lecturesBooked === requiredLectures && labsBooked === requiredLabs) break;
       }
 
       // Commit the best plan found
       if (bestPlan && bestPlan.entries.length > 0) {
         for (const b of bestPlan.bookings) {
-          bookGlobal(b.day, b.slotNumber, b.faculty, b.room);
+          bookGlobal(b.day, b.slotNumber, b.faculty, b.room, sem);
+          semesterTempSlots.add(slotKey(b.day, b.slotNumber)); // Track for next subject in same semester
         }
         entries.push(...bestPlan.entries);
-        console.log(`  ✅ Placed ${bestPlan.entries.length} slots for ${subjectName}`);
+        console.log(`  ✅ Placed ${bestPlan.entries.length} slots for ${bestPlan.entries[0].subject}`);
       } else {
-        console.warn(`  ⚠️ Could not schedule: ${subjectName} (Sem ${sem})`);
+        console.warn(`  ⚠️ Could not schedule: ${subj.name || subj.code} (Sem ${sem})`);
       }
     }
 
