@@ -2,9 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/components/ui/Label";
 import { Loader2, LogIn } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,16 +17,17 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    //setLoading(true);
     try {
       await login(username, password);
-      toast.success("Logged in successfully!");
+      //toast.success("Logged in successfully!");
       navigate("/");
-    } catch (err: any) {
-      toast.error(err.message || "Login failed");
-    } finally {
-      setLoading(false);
-    }
+    } catch {
+      toast.error( "Invalid username or password");
+     } 
+    //finally {
+    //   setLoading(false);
+    // }
   };
 
   return (
