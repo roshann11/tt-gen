@@ -1,61 +1,98 @@
-import { Toaster } from "sonner";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@radix-ui/react-tooltip";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import AppLayout from "@/components/AppLayout";
+import { Toaster } from "sonner";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+
+import LoginPage from "@/pages/LoginPage";
 import Dashboard from "@/pages/Dashboard";
-import FacultyPage from "@/pages/FacultyPages";
-import RoomsPage from "@/pages/RoomsPage";
-import SubjectsPage from "@/pages/SubjectsPage";
-import TimeSlotsPage from "@/pages/TimeSlotsPage";
+import ImportData from "@/pages/ImportData";
 import TimetablePage from "@/pages/TimeTablePage";
 import NotFound from "@/pages/NotFound";
-import ProtectedRoute from "@/components/ProtectedRoute";
-import LoginPage from "@/pages/LoginPage";
-import Index from "./pages/Index";
-import { AuthProvider } from "@/contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            } />
-            {/* Student, Faculty, Admin can view timetable */}
-            {/* { <Route path="/timetable" element={
-              <ProtectedRoute allowedRoles={["student", "faculty", "admin"]}>
-                <TimetablePage />
-              </ProtectedRoute>
-            } /> }
-            {/* Faculty + Admin can manage rooms/subjects/slots */}
-            {/* { <Route path="/rooms" element={
-              <ProtectedRoute allowedRoles={["faculty", "admin"]}>
-                <RoomsPage />
-              </ProtectedRoute>
-            } /> } */}
-            {/* Admin only routes */}
-            {/* { <Route path="/manage-users" element={
-              <ProtectedRoute allowedRoles={["admin"]}>
-                <ManageUsersPage />
-              </ProtectedRoute>
-            } /> }  */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+// ── Protected Route wrapper ──
+function ProtectedRoute({
+  children,
+  allowed,
+}: {
+  children: React.ReactNode;
+  allowed: string[];
+}) {
+  const { user } = useAuth();
 
-export default App;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!allowed.includes(user.role)) return <Navigate to="/" replace />;
+
+  return <>{children}</>;
+}
+
+// ── Root redirect based on role ──
+function RootRedirect() {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "student") return <Navigate to="/timetable" replace />;
+  return <Navigate to="/dashboard" replace />;
+}
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<RootRedirect />} />
+
+      {/* Admin + Faculty */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute allowed={["admin", "faculty"]}>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/import"
+        element={
+          <ProtectedRoute allowed={["admin", "faculty"]}>
+            <ImportData />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Admin only */}
+      <Route
+        path="/manage-users"
+        element={
+          <ProtectedRoute allowed={["admin"]}>
+            <Dashboard /> {/* Replace with UserManagement page when ready */}
+          </ProtectedRoute>
+        }
+      />
+
+      {/* All authenticated users */}
+      <Route
+        path="/timetable"
+        element={
+          <ProtectedRoute allowed={["admin", "faculty", "student"]}>
+            <TimetablePage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <Toaster richColors position="top-right" />
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  );
+}

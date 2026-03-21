@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import axios from "axios";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 interface User {
   id: string;
@@ -11,52 +14,63 @@ interface AuthContextType {
   token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  isLoading: boolean;
+  isloading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
-  const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
+  const [isloading, setisLoading] = useState(true);
 
+  // Restore session from localStorage on mount
   useEffect(() => {
-    if (token) {
-      fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
-        .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then((data) => setUser(data.user))
-        .catch(() => { setToken(null); localStorage.removeItem("token"); })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
+    const savedToken = localStorage.getItem("token");
+    const savedUser = localStorage.getItem("user");
+    if (savedToken && savedUser) {
+      try {
+        setToken(savedToken);
+        setUser(JSON.parse(savedUser));
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
-  }, [token]);
+    setisLoading(false);
+  }, []);
 
   const login = async (username: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+    const res = await axios.post(`${API_URL}/api/auth/login`, {
+      username,
+      password,
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.message || "Login failed");
-    }
-    const data = await res.json();
-    localStorage.setItem("token", data.token);
-    setToken(data.token);
-    setUser(data.user);
+
+    const { token: jwt, user: userData } = res.data;
+
+    localStorage.setItem("token", jwt);
+    localStorage.setItem("user", JSON.stringify(userData));
+    setToken(jwt);
+    setUser(userData);
   };
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     setToken(null);
     setUser(null);
   };
 
+  if (isloading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, isloading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -8,9 +8,9 @@ interface Props {
 }
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
-  const { user, isLoading } = useAuth();
+  const { user, isloading } = useAuth();
 
-  if (isLoading) {
+  if (isloading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />

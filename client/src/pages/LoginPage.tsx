@@ -17,17 +17,17 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    //setLoading(true);
+    setLoading(true);
     try {
       await login(username, password);
-      //toast.success("Logged in successfully!");
+      toast.success("Logged in successfully!");
       navigate("/");
     } catch {
       toast.error( "Invalid username or password");
      } 
-    //finally {
-    //   setLoading(false);
-    // }
+    finally {
+      setLoading(false);
+    }
   };
 
   return (
