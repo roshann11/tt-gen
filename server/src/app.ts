@@ -10,6 +10,7 @@ import timeSlotRoutes from "./routes/timeSlots";
 import timetableRoutes from "./routes/timetable";
 import { errorHandler } from "./middleware/errorHandler";
 import mongoose from "mongoose";
+import authRoutes from "./routes/auth";
 
 dotenv.config();
 //connectDB();
@@ -18,6 +19,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
+app.use("/api/auth", authRoutes);
 app.get("/", (_req, res) => res.json({ message: "API is running" }));
 app.use("/api/faculty", facultyRoutes);
 app.use("/api/rooms", roomRoutes);
