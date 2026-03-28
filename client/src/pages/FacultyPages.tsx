@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Users, Pencil, Trash2 } from "lucide-react";
-import { getFaculty, createFaculty, updateFaculty, deleteFaculty } from "@/lib/api";
+import { getFaculties, createFaculty, updateFaculty, deleteFaculty } from "@/lib/api";
 import DataPageShell from "@/components/DatapageShell";
 import { toast } from "sonner";
 
 export default function FacultyPage() {
   const qc = useQueryClient();
-  const { data = [], isLoading } = useQuery({ queryKey: ["faculty"], queryFn: getFaculty });
+  const { data = [], isLoading } = useQuery({ queryKey: ["faculty"], queryFn: getFaculties });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [form, setForm] = useState({ name: "", department: "", shortName: "" });
