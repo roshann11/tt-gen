@@ -1,11 +1,7 @@
-// 
-
-
-
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { Users, DoorOpen, BookOpen, Clock, AlertCircle } from "lucide-react";
-import { getFaculties, getRooms, getSubjects, getTimeSlots } from "@/lib/api";
+import { getFaculty, getRooms, getSubjects, getTimeSlots } from "@/lib/api";
 
 const statCards = [
   { key: "faculty",   label: "Faculty",    icon: Users,    color: "bg-primary" },
@@ -22,7 +18,7 @@ function extractArray(response: any): any[] {
 }
 
 export default function Dashboard() {
-  const faculty   = useQuery({ queryKey: ["faculty"],   queryFn: getFaculties });
+  const faculty   = useQuery({ queryKey: ["faculty"],   queryFn: getFaculty });
   const rooms     = useQuery({ queryKey: ["rooms"],     queryFn: getRooms });
   const subjects  = useQuery({ queryKey: ["subjects"],  queryFn: getSubjects });
   const timeslots = useQuery({ queryKey: ["timeslots"], queryFn: getTimeSlots });
