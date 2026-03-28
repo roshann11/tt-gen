@@ -29,7 +29,7 @@ export default function AppLayout() {
       <aside className="hidden md:flex w-64 flex-col bg-[hsl(var(--sidebar))] text-[hsl(var(--sidebar-foreground))]">
         <div className="flex items-center gap-2 px-6 py-5 border-b border-[hsl(var(--sidebar-border))]">
           <GraduationCap className="h-7 w-7 text-[hsl(var(--sidebar-primary))]" />
-          <span className="text-lg font-bold tracking-tight">TT Generator</span>
+          <span className="text-lg font-bold tracking-tight">TimeTable PRO</span>
         </div>
 
         <nav className="flex-1 flex flex-col gap-1 px-3 py-4">
