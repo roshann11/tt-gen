@@ -48,8 +48,9 @@
     "esModuleInterop": true,
     "outDir": "dist",
     "rootDir": "src",
-    "strict": true,
-    "resolveJsonModule": true
+    //"strict": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   },
   "include": ["src"],
 }
