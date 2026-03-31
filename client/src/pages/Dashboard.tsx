@@ -42,7 +42,7 @@ export default function Dashboard() {
       {isAnyError && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           <AlertCircle className="h-5 w-5" />
-          <span>Cannot reach backend at <code>localhost:5000</code>. Make sure your server is running.</span>
+          <span>Cannot reach backend at <code>https://tt-gen.onrender.com</code>. Make sure your server is running.</span>
         </div>
       )}
 
