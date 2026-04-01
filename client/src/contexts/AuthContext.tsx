@@ -24,17 +24,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isloading, setisLoading] = useState(true);
 
-  // Restore session from localStorage on mount
+  // Restore session from sessionStorage on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
+    const savedToken = sessionStorage.getItem("token");
+    const savedUser = sessionStorage.getItem("user");
     if (savedToken && savedUser) {
       try {
         setToken(savedToken);
         setUser(JSON.parse(savedUser));
       } catch {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("user");
       }
     }
     setisLoading(false);
@@ -48,15 +48,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { token: jwt, user: userData } = res.data;
 
-    localStorage.setItem("token", jwt);
-    localStorage.setItem("user", JSON.stringify(userData));
+    sessionStorage.setItem("token", jwt);
+    sessionStorage.setItem("user", JSON.stringify(userData));
     setToken(jwt);
     setUser(userData);
   };
 
   const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setToken(null);
     setUser(null);
   };
