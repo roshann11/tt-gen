@@ -36,6 +36,8 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Timetable Manager</CardTitle>
           <CardDescription>Sign in to your account</CardDescription>
+          <CardDescription>Users - admin,faculty,student</CardDescription>
+          <CardDescription>Passwords - admin123,faculty123,student123</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
