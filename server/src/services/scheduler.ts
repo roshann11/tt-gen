@@ -120,230 +120,244 @@ export async function generateTimetable() {
 
   if (!allFacultyNames.length) throw new Error("No valid faculty found.");
 
-  const facultyLoad: FacultyLoad = {};
-  for (const fac of allFacultyNames) {
-    facultyLoad[fac] = { total: 0, perDay: {} };
-    for (const d of [...new Set([...DAYS, ...availableDays])]) {
-      facultyLoad[fac].perDay[d] = 0;
-    }
-  }
-
-  // Global occupancy tracking
-  const occupiedFaculty: Record<string, Set<string>> = {};
-  const occupiedRoom: Record<string, Set<string>> = {};
-  const occupiedSemesterSlot: Record<string, Set<string>> = {}; // NEW: prevent same-semester conflicts
-  const slotKey = (day: string, slotNum: number) => `${day}-${slotNum}`;
-
-  const tempDayLoad = (temp: TempBooking[], faculty: string, day: string) =>
-    temp.filter((b) => b.faculty === faculty && b.day === day).length;
-
-  const isAvailable = (
-    day: string, slotNum: number, facultyName: string, roomName: string,
-    tempBookings: TempBooking[], semester: number // NEW param
-  ) => {
-    const key = slotKey(day, slotNum);
-
-    // Check semester-slot conflict: another subject in the same semester already occupies this slot
-    if (occupiedSemesterSlot[key]?.has(String(semester))) return false;
-
-    if (occupiedFaculty[key]?.has(facultyName)) return false;
-    if (occupiedRoom[key]?.has(roomName)) return false;
-
-    const tempConflict = tempBookings.some(
-      (b) => b.day === day && b.slotNumber === slotNum && (b.faculty === facultyName || b.room === roomName)
-    );
-    if (tempConflict) return false;
-
-    const currentDayLoad = facultyLoad[facultyName]?.perDay[day] ?? 0;
-    if (currentDayLoad + tempDayLoad(tempBookings, facultyName, day) >= MAX_PER_DAY) return false;
-
-    return true;
-  };
-
-  const bookGlobal = (day: string, slotNum: number, facultyName: string, roomName: string, semester: number) => {
-    const key = slotKey(day, slotNum);
-    if (!occupiedFaculty[key]) occupiedFaculty[key] = new Set();
-    if (!occupiedRoom[key]) occupiedRoom[key] = new Set();
-    if (!occupiedSemesterSlot[key]) occupiedSemesterSlot[key] = new Set();
-    occupiedFaculty[key].add(facultyName);
-    occupiedRoom[key].add(roomName);
-    occupiedSemesterSlot[key].add(String(semester)); // NEW: mark semester-slot as occupied
-    facultyLoad[facultyName].total += 1;
-    facultyLoad[facultyName].perDay[day] = (facultyLoad[facultyName].perDay[day] || 0) + 1;
-  };
-
   const semesters = [...new Set(
     subjects.map((s: any) => normalizeSemester(s.semester)).filter(Number.isFinite)
   )].sort((a, b) => a - b);
 
   if (!semesters.length) throw new Error("No valid semester values found in subjects.");
 
+  // Group semesters into batches (odd and even) that can run simultaneously
+  const oddSemesters = semesters.filter(s => s % 2 !== 0);
+  const evenSemesters = semesters.filter(s => s % 2 === 0);
+
+  const batches = [];
+  if (oddSemesters.length) batches.push(oddSemesters);
+  if (evenSemesters.length) batches.push(evenSemesters);
+
   const results: any[] = [];
 
-  for (const sem of semesters) {
-    const semSubjects = subjects.filter((s: any) => normalizeSemester(s.semester) === sem);
-    if (!semSubjects.length) continue;
-
-    semSubjects.sort((a: any, b: any) => {
-      const aWeight = (a.hasLab ? 10 : 0) + (a.lecturesPerWeek || 3);
-      const bWeight = (b.hasLab ? 10 : 0) + (b.lecturesPerWeek || 3);
-      return bWeight - aWeight;
-    });
-
-    const entries: SlotEntry[] = [];
-
-    // Track semester-level temp bookings to prevent intra-subject conflicts within same semester
-    const semesterTempSlots: Set<string> = new Set();
-
-    for (const subj of semSubjects as any[]) {
-      const subjectName = subj.name || subj.code || "Unknown";
-      const subjectCode = subj.code || "";
-      const requiredLectures = Math.max(0, Number(subj.lecturesPerWeek ?? 3));
-      const requiredLabs = subj.hasLab ? Math.max(0, Number(subj.labsPerWeek ?? 1)) : 0;
-
-      console.log(`📝 Scheduling: ${subjectName} (${subjectCode}) Sem ${sem} — ${requiredLectures} lectures, ${requiredLabs} labs`);
-
-      let eligibleFaculty = allFacultyNames.filter(
-        (fn) => facultyMap[fn].subjects.includes(subjectCode)
-      );
-      if (!eligibleFaculty.length) {
-        eligibleFaculty = [...allFacultyNames];
+  for (const batchSemesters of batches) {
+    console.log(`🗓️ Processing batch of simultaneous semesters: ${batchSemesters.join(", ")}`);
+    
+    // Reset global state for the batch
+    const facultyLoad: FacultyLoad = {};
+    for (const fac of allFacultyNames) {
+      facultyLoad[fac] = { total: 0, perDay: {} };
+      for (const d of [...new Set([...DAYS, ...availableDays])]) {
+        facultyLoad[fac].perDay[d] = 0;
       }
+    }
 
-      eligibleFaculty.sort((a, b) => (facultyLoad[a]?.total ?? 0) - (facultyLoad[b]?.total ?? 0));
+    const occupiedFaculty: Record<string, Set<string>> = {};
+    const occupiedRoom: Record<string, Set<string>> = {};
+    const occupiedSemesterSlot: Record<string, Set<string>> = {};
+    const slotKey = (day: string, slotNum: number) => `${day}-${slotNum}`;
 
-      let bestPlan: { bookings: TempBooking[]; entries: SlotEntry[] } | null = null;
-      let bestScore = -1;
+    const tempDayLoad = (temp: TempBooking[], faculty: string, day: string) =>
+      temp.filter((b) => b.faculty === faculty && b.day === day).length;
 
-      for (const facultyName of eligibleFaculty) {
-        const tempBookings: TempBooking[] = [];
-        const tempEntries: SlotEntry[] = [];
-        let lecturesBooked = 0;
-        let labsBooked = 0;
-        const days = shuffle(availableDays);
+    const isAvailable = (
+      day: string, slotNum: number, facultyName: string, roomName: string,
+      tempBookings: TempBooking[], semester: number
+    ) => {
+      const key = slotKey(day, slotNum);
 
-        // Pass 1: spread lectures across days (1 per day)
-        for (const day of days) {
-          if (lecturesBooked >= requiredLectures) break;
-          const daySlots = slotsByDay[day] ?? [];
-          for (const slot of daySlots) {
-            // Also check semester-level temp slots
-            if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
+      if (occupiedSemesterSlot[key]?.has(String(semester))) return false;
+      if (occupiedFaculty[key]?.has(facultyName)) return false;
+      if (occupiedRoom[key]?.has(roomName)) return false;
 
-            const roomName = lectureRooms.find((r) =>
-              isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
-            );
-            if (!roomName) continue;
-            tempBookings.push({ day, slotNumber: slot.slotNumber, faculty: facultyName, room: roomName });
-            tempEntries.push({
-              day, slotNumber: slot.slotNumber, startTime: slot.startTime, endTime: slot.endTime,
-              subject: subjectName, type: "lecture", faculty: facultyName, room: roomName,
-            });
-            lecturesBooked++;
-            break;
-          }
+      const tempConflict = tempBookings.some(
+        (b) => b.day === day && b.slotNumber === slotNum && (b.faculty === facultyName || b.room === roomName)
+      );
+      if (tempConflict) return false;
+
+      const currentDayLoad = facultyLoad[facultyName]?.perDay[day] ?? 0;
+      if (currentDayLoad + tempDayLoad(tempBookings, facultyName, day) >= MAX_PER_DAY) return false;
+
+      return true;
+    };
+
+    const bookGlobal = (day: string, slotNum: number, facultyName: string, roomName: string, semester: number) => {
+      const key = slotKey(day, slotNum);
+      if (!occupiedFaculty[key]) occupiedFaculty[key] = new Set();
+      if (!occupiedRoom[key]) occupiedRoom[key] = new Set();
+      if (!occupiedSemesterSlot[key]) occupiedSemesterSlot[key] = new Set();
+      occupiedFaculty[key].add(facultyName);
+      occupiedRoom[key].add(roomName);
+      occupiedSemesterSlot[key].add(String(semester));
+      facultyLoad[facultyName].total += 1;
+      facultyLoad[facultyName].perDay[day] = (facultyLoad[facultyName].perDay[day] || 0) + 1;
+    };
+
+    // Track labs per day for each semester to enforce max 2 labs per day limit
+    const semesterLabsPerDay: Record<number, Record<string, number>> = {};
+    for (const sem of batchSemesters) {
+      semesterLabsPerDay[sem] = {};
+      for (const d of availableDays) {
+        semesterLabsPerDay[sem][d] = 0;
+      }
+    }
+
+    for (const sem of batchSemesters) {
+      const semSubjects = subjects.filter((s: any) => normalizeSemester(s.semester) === sem);
+      if (!semSubjects.length) continue;
+
+      semSubjects.sort((a: any, b: any) => {
+        const aWeight = (a.hasLab ? 10 : 0) + (a.lecturesPerWeek || 3);
+        const bWeight = (b.hasLab ? 10 : 0) + (b.lecturesPerWeek || 3);
+        return bWeight - aWeight;
+      });
+
+      const entries: SlotEntry[] = [];
+      const semesterTempSlots: Set<string> = new Set();
+
+      for (const subj of semSubjects as any[]) {
+        const subjectName = subj.name || subj.code || "Unknown";
+        const subjectCode = subj.code || "";
+        const requiredLectures = Math.max(0, Number(subj.lecturesPerWeek ?? 3));
+        const requiredLabs = subj.hasLab ? Math.max(0, Number(subj.labsPerWeek ?? 1)) : 0;
+
+        console.log(`📝 Scheduling: ${subjectName} (${subjectCode}) Sem ${sem} — ${requiredLectures} lectures, ${requiredLabs} labs`);
+
+        let eligibleFaculty = allFacultyNames.filter(
+          (fn) => facultyMap[fn].subjects.includes(subjectCode)
+        );
+        if (!eligibleFaculty.length) {
+          eligibleFaculty = [...allFacultyNames];
         }
 
-        // Pass 2: fill remaining lectures
-        if (lecturesBooked < requiredLectures) {
-          for (const day of days) {
-            if (lecturesBooked >= requiredLectures) break;
-            for (const slot of (slotsByDay[day] ?? [])) {
-              if (lecturesBooked >= requiredLectures) break;
-              if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
+        eligibleFaculty.sort((a, b) => (facultyLoad[a]?.total ?? 0) - (facultyLoad[b]?.total ?? 0));
 
-              const roomName = lectureRooms.find((r) =>
-                isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
-              );
-              if (!roomName) continue;
-              tempBookings.push({ day, slotNumber: slot.slotNumber, faculty: facultyName, room: roomName });
-              tempEntries.push({
-                day, slotNumber: slot.slotNumber, startTime: slot.startTime, endTime: slot.endTime,
-                subject: subjectName, type: "lecture", faculty: facultyName, room: roomName,
-              });
-              lecturesBooked++;
+        let bestPlan: { bookings: TempBooking[]; entries: SlotEntry[] } | null = null;
+        let bestScore = -1;
+
+        for (const facultyName of eligibleFaculty) {
+          const tempBookings: TempBooking[] = [];
+          const tempEntries: SlotEntry[] = [];
+          const subjectDays = new Set<string>(); // Used to prevent more than 1 class (lab or theory) of the same subject per day
+          let lecturesBooked = 0;
+          let labsBooked = 0;
+          const days = shuffle(availableDays);
+
+          // Phase 1: Schedule labs (2 consecutive slots)
+          if (requiredLabs > 0 && labRooms.length > 0) {
+            for (let l = 0; l < requiredLabs; l++) {
+              let labPlaced = false;
+              for (const day of shuffle(days)) {
+                if (labPlaced) break;
+                if (semesterLabsPerDay[sem][day] >= 2) continue; // Max 2 labs per day for the semester
+                if (subjectDays.has(day)) continue; // Not more than once per day for the same subject
+
+                const daySlots = [...(slotsByDay[day] ?? [])].sort((a, b) => a.slotNumber - b.slotNumber);
+                for (let i = 0; i < daySlots.length - 1; i++) {
+                  const s1 = daySlots[i];
+                  const s2 = daySlots[i + 1];
+                  if (s2.slotNumber !== s1.slotNumber + 1) continue;
+
+                  if (semesterTempSlots.has(slotKey(day, s1.slotNumber))) continue;
+                  if (semesterTempSlots.has(slotKey(day, s2.slotNumber))) continue;
+
+                  const labName = labRooms.find(
+                    (lab) =>
+                      isAvailable(day, s1.slotNumber, facultyName, lab, tempBookings, sem) &&
+                      isAvailable(day, s2.slotNumber, facultyName, lab, tempBookings, sem)
+                  );
+                  if (!labName) continue;
+                  
+                  tempBookings.push({ day, slotNumber: s1.slotNumber, faculty: facultyName, room: labName });
+                  tempBookings.push({ day, slotNumber: s2.slotNumber, faculty: facultyName, room: labName });
+                  tempEntries.push({
+                    day, slotNumber: s1.slotNumber, startTime: s1.startTime, endTime: s1.endTime,
+                    subject: subjectName, type: "lab", faculty: facultyName, room: labName,
+                  });
+                  tempEntries.push({
+                    day, slotNumber: s2.slotNumber, startTime: s2.startTime, endTime: s2.endTime,
+                    subject: subjectName, type: "lab", faculty: facultyName, room: labName,
+                  });
+                  labsBooked++;
+                  subjectDays.add(day);
+                  labPlaced = true;
+                  break;
+                }
+              }
             }
           }
-        }
 
-        // Labs: 2 consecutive slots in a lab room
-        if (requiredLabs > 0 && labRooms.length > 0) {
-          for (let l = 0; l < requiredLabs; l++) {
-            let labPlaced = false;
+          // Phase 2: Schedule lectures (1 slot)
+          for (let l = 0; l < requiredLectures; l++) {
+            let lecturePlaced = false;
             for (const day of shuffle(days)) {
-              if (labPlaced) break;
-              const daySlots = [...(slotsByDay[day] ?? [])].sort((a, b) => a.slotNumber - b.slotNumber);
-              for (let i = 0; i < daySlots.length - 1; i++) {
-                const s1 = daySlots[i];
-                const s2 = daySlots[i + 1];
-                if (s2.slotNumber !== s1.slotNumber + 1) continue;
+              if (lecturePlaced) break;
+              if (subjectDays.has(day)) continue; // Not more than once per day for the same subject
 
-                // Check semester-level conflicts for both consecutive slots
-                if (semesterTempSlots.has(slotKey(day, s1.slotNumber))) continue;
-                if (semesterTempSlots.has(slotKey(day, s2.slotNumber))) continue;
+              const daySlots = slotsByDay[day] ?? [];
+              for (const slot of daySlots) {
+                if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
 
-                const labName = labRooms.find(
-                  (lab) =>
-                    isAvailable(day, s1.slotNumber, facultyName, lab, tempBookings, sem) &&
-                    isAvailable(day, s2.slotNumber, facultyName, lab, tempBookings, sem)
+                const roomName = lectureRooms.find((r) =>
+                  isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
                 );
-                if (!labName) continue;
-                tempBookings.push({ day, slotNumber: s1.slotNumber, faculty: facultyName, room: labName });
-                tempBookings.push({ day, slotNumber: s2.slotNumber, faculty: facultyName, room: labName });
+                if (!roomName) continue;
+
+                tempBookings.push({ day, slotNumber: slot.slotNumber, faculty: facultyName, room: roomName });
                 tempEntries.push({
-                  day, slotNumber: s1.slotNumber, startTime: s1.startTime, endTime: s1.endTime,
-                  subject: subjectName, type: "lab", faculty: facultyName, room: labName,
+                  day, slotNumber: slot.slotNumber, startTime: slot.startTime, endTime: slot.endTime,
+                  subject: subjectName, type: "lecture", faculty: facultyName, room: roomName,
                 });
-                tempEntries.push({
-                  day, slotNumber: s2.slotNumber, startTime: s2.startTime, endTime: s2.endTime,
-                  subject: subjectName, type: "lab", faculty: facultyName, room: labName,
-                });
-                labsBooked++;
-                labPlaced = true;
+                lecturesBooked++;
+                subjectDays.add(day);
+                lecturePlaced = true;
                 break;
               }
             }
           }
+
+          const score = lecturesBooked + labsBooked * 2;
+          if (score > bestScore) {
+            bestScore = score;
+            bestPlan = { bookings: [...tempBookings], entries: [...tempEntries] };
+          }
+
+          if (lecturesBooked === requiredLectures && labsBooked === requiredLabs) break;
         }
 
-        const score = lecturesBooked + labsBooked * 2;
-        if (score > bestScore) {
-          bestScore = score;
-          bestPlan = { bookings: [...tempBookings], entries: [...tempEntries] };
-        }
+        if (bestPlan && bestPlan.entries.length > 0) {
+          for (const b of bestPlan.bookings) {
+            bookGlobal(b.day, b.slotNumber, b.faculty, b.room, sem);
+            semesterTempSlots.add(slotKey(b.day, b.slotNumber));
+          }
+          
+          // Increment semester labs per day based on best plan
+          const tempLabs = bestPlan.entries.filter(e => e.type === "lab");
+          const labDays = new Set(tempLabs.map(e => e.day));
+          for (const d of labDays) {
+            semesterLabsPerDay[sem][d] += 1;
+          }
 
-        if (lecturesBooked === requiredLectures && labsBooked === requiredLabs) break;
+          entries.push(...bestPlan.entries);
+          console.log(`  ✅ Placed ${bestPlan.entries.length} slots for ${bestPlan.entries[0].subject}`);
+        } else {
+          console.warn(`  ⚠️ Could not schedule: ${subj.name || subj.code} (Sem ${sem})`);
+        }
       }
 
-      // Commit the best plan found
-      if (bestPlan && bestPlan.entries.length > 0) {
-        for (const b of bestPlan.bookings) {
-          bookGlobal(b.day, b.slotNumber, b.faculty, b.room, sem);
-          semesterTempSlots.add(slotKey(b.day, b.slotNumber)); // Track for next subject in same semester
-        }
-        entries.push(...bestPlan.entries);
-        console.log(`  ✅ Placed ${bestPlan.entries.length} slots for ${bestPlan.entries[0].subject}`);
-      } else {
-        console.warn(`  ⚠️ Could not schedule: ${subj.name || subj.code} (Sem ${sem})`);
-      }
-    }
+      console.log(`📅 Semester ${sem}: ${entries.length} total entries`);
 
-    console.log(`📅 Semester ${sem}: ${entries.length} total entries`);
-
-    const timetable = await Timetable.findOneAndUpdate(
-      { semester: sem },
-      {
-        $set: {
-          semester: sem,
-          entries,
-          generatedAt: new Date(),
+      const timetable = await Timetable.findOneAndUpdate(
+        { semester: sem },
+        {
+          $set: {
+            semester: sem,
+            entries,
+            generatedAt: new Date(),
+          },
+          $unset: { schedule: 1 },
         },
-        $unset: { schedule: 1 },
-      },
-      { upsert: true, new: true },
-    );
+        { upsert: true, new: true },
+      );
 
-    results.push(timetable);
+      results.push(timetable);
+    }
   }
 
   return results;
