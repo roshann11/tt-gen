@@ -10,7 +10,7 @@ export default function SubjectsPage() {
   const { data = [], isLoading } = useQuery({ queryKey: ["subjects"], queryFn: getSubjects });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", code: "", semester: "", credits: "" });
+  const [form, setForm] = useState({ name: "", code: "", semester: "", credits: "", hasLab: true, lecturesPerWeek: "3", labsPerWeek: "1" });
 
   const createMut = useMutation({
     mutationFn: (d: any) => createSubject(d),
@@ -28,10 +28,18 @@ export default function SubjectsPage() {
   function openDialog(item?: any) {
     if (item) {
       setEditing(item);
-      setForm({ name: item.name || "", code: item.code || "", semester: String(item.semester || ""), credits: String(item.credits || "") });
+      setForm({
+        name: item.name || "",
+        code: item.code || "",
+        semester: String(item.semester || ""),
+        credits: String(item.credits || ""),
+        hasLab: item.hasLab ?? true,
+        lecturesPerWeek: String(item.lecturesPerWeek ?? 3),
+        labsPerWeek: String(item.labsPerWeek ?? 1),
+      });
     } else {
       setEditing(null);
-      setForm({ name: "", code: "", semester: "", credits: "" });
+      setForm({ name: "", code: "", semester: "", credits: "", hasLab: true, lecturesPerWeek: "3", labsPerWeek: "1" });
     }
     setDialogOpen(true);
   }
@@ -40,7 +48,15 @@ export default function SubjectsPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { name: form.name, code: form.code, semester: Number(form.semester), credits: Number(form.credits) };
+    const payload = {
+      name: form.name,
+      code: form.code,
+      semester: Number(form.semester),
+      credits: Number(form.credits),
+      hasLab: form.hasLab,
+      lecturesPerWeek: Number(form.lecturesPerWeek),
+      labsPerWeek: form.hasLab ? Number(form.labsPerWeek) : 0,
+    };
     if (editing) updateMut.mutate({ id: editing._id, ...payload });
     else createMut.mutate(payload);
   }
@@ -62,6 +78,8 @@ export default function SubjectsPage() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Code</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Semester</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Credits</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Lectures/Wk</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Has Lab</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground w-24">Actions</th>
               </tr>
             </thead>
@@ -72,6 +90,16 @@ export default function SubjectsPage() {
                   <td className="px-4 py-3">{s.code}</td>
                   <td className="px-4 py-3">{s.semester}</td>
                   <td className="px-4 py-3">{s.credits}</td>
+                  <td className="px-4 py-3">{s.lecturesPerWeek ?? 3}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      s.hasLab
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                        : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                    }`}>
+                      {s.hasLab ? `✅ Yes (${s.labsPerWeek ?? 1}/wk)` : "❌ No"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button onClick={() => openDialog(s)} className="p-1.5 rounded hover:bg-muted"><Pencil className="h-4 w-4" /></button>
@@ -111,6 +139,32 @@ export default function SubjectsPage() {
                   <input type="number" value={form.credits} onChange={(e) => setForm({ ...form, credits: e.target.value })} required
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Lectures Per Week</label>
+                  <input type="number" min="0" value={form.lecturesPerWeek} onChange={(e) => setForm({ ...form, lecturesPerWeek: e.target.value })} required
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                {form.hasLab && (
+                  <div>
+                    <label className="text-sm font-medium">Labs Per Week</label>
+                    <input type="number" min="0" value={form.labsPerWeek} onChange={(e) => setForm({ ...form, labsPerWeek: e.target.value })}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 pt-1">
+                <input
+                  type="checkbox"
+                  id="hasLab"
+                  checked={form.hasLab}
+                  onChange={(e) => setForm({ ...form, hasLab: e.target.checked })}
+                  className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
+                />
+                <label htmlFor="hasLab" className="text-sm font-medium cursor-pointer select-none">
+                  This subject has a lab component
+                </label>
               </div>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={closeDialog} className="px-4 py-2 text-sm rounded-md border hover:bg-muted">Cancel</button>

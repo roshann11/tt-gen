@@ -10,7 +10,7 @@ export default function RoomsPage() {
   const { data = [], isLoading } = useQuery({ queryKey: ["rooms"], queryFn: getRooms });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", capacity: "" });
+  const [form, setForm] = useState({ name: "", capacity: "", type: "lecture" });
 
   const createMut = useMutation({
     mutationFn: (d: any) => createRoom(d),
@@ -28,10 +28,10 @@ export default function RoomsPage() {
   function openDialog(item?: any) {
     if (item) {
       setEditing(item);
-      setForm({ name: item.name || "", capacity: String(item.capacity || "") });
+      setForm({ name: item.name || "", capacity: String(item.capacity || ""), type: item.type || "lecture" });
     } else {
       setEditing(null);
-      setForm({ name: "", capacity: "" });
+      setForm({ name: "", capacity: "", type: "lecture" });
     }
     setDialogOpen(true);
   }
@@ -40,7 +40,7 @@ export default function RoomsPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const payload = { name: form.name, capacity: Number(form.capacity) };
+    const payload = { name: form.name, capacity: Number(form.capacity), type: form.type };
     if (editing) updateMut.mutate({ id: editing._id, ...payload });
     else createMut.mutate(payload);
   }
@@ -60,6 +60,7 @@ export default function RoomsPage() {
               <tr>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Room Name</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Capacity</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Type</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground w-24">Actions</th>
               </tr>
             </thead>
@@ -68,6 +69,15 @@ export default function RoomsPage() {
                 <tr key={r._id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3 font-medium">{r.name}</td>
                   <td className="px-4 py-3">{r.capacity}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      r.type === "lab"
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"
+                        : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                    }`}>
+                      {r.type === "lab" ? "🔬 Lab" : "🏫 Lecture"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button onClick={() => openDialog(r)} className="p-1.5 rounded hover:bg-muted"><Pencil className="h-4 w-4" /></button>
@@ -95,6 +105,14 @@ export default function RoomsPage() {
                 <label className="text-sm font-medium">Capacity</label>
                 <input type="number" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: e.target.value })} required
                   className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Room Type</label>
+                <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="lecture">🏫 Lecture Room</option>
+                  <option value="lab">🔬 Lab</option>
+                </select>
               </div>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={closeDialog} className="px-4 py-2 text-sm rounded-md border hover:bg-muted">Cancel</button>
