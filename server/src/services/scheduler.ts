@@ -199,10 +199,10 @@ export async function generateTimetable() {
     }
 
     for (const sem of batchSemesters) {
-      const semSubjects = subjects.filter((s: any) => normalizeSemester(s.semester) === sem);
+      let semSubjects = subjects.filter((s: any) => normalizeSemester(s.semester) === sem);
       if (!semSubjects.length) continue;
 
-      semSubjects.sort((a: any, b: any) => {
+      semSubjects = shuffle(semSubjects).sort((a: any, b: any) => {
         const aWeight = (a.hasLab ? 10 : 0) + (a.lecturesPerWeek || 3);
         const bWeight = (b.hasLab ? 10 : 0) + (b.lecturesPerWeek || 3);
         return bWeight - aWeight;
@@ -226,7 +226,7 @@ export async function generateTimetable() {
           eligibleFaculty = [...allFacultyNames];
         }
 
-        eligibleFaculty.sort((a, b) => (facultyLoad[a]?.total ?? 0) - (facultyLoad[b]?.total ?? 0));
+        eligibleFaculty = shuffle(eligibleFaculty).sort((a, b) => (facultyLoad[a]?.total ?? 0) - (facultyLoad[b]?.total ?? 0));
 
         let bestPlan: { bookings: TempBooking[]; entries: SlotEntry[] } | null = null;
         let bestScore = -1;
@@ -257,7 +257,7 @@ export async function generateTimetable() {
                   if (semesterTempSlots.has(slotKey(day, s1.slotNumber))) continue;
                   if (semesterTempSlots.has(slotKey(day, s2.slotNumber))) continue;
 
-                  const labName = labRooms.find(
+                  const labName = shuffle(labRooms).find(
                     (lab) =>
                       isAvailable(day, s1.slotNumber, facultyName, lab, tempBookings, sem) &&
                       isAvailable(day, s2.slotNumber, facultyName, lab, tempBookings, sem)
@@ -294,7 +294,7 @@ export async function generateTimetable() {
               for (const slot of daySlots) {
                 if (semesterTempSlots.has(slotKey(day, slot.slotNumber))) continue;
 
-                const roomName = lectureRooms.find((r) =>
+                const roomName = shuffle(lectureRooms).find((r) =>
                   isAvailable(day, slot.slotNumber, facultyName, r, tempBookings, sem)
                 );
                 if (!roomName) continue;
